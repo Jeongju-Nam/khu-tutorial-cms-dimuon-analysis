@@ -17,5 +17,5 @@ mamba activate ./dimuon-env
 
 ### Run the code
 ```bash
-python ./ex01.p
+python ./ex01.py
 ```
