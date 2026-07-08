@@ -1,11 +1,14 @@
-"""
-Vectorized successor of ex01.py.
+"""Build a dimuon invariant-mass spectrum with chunked vector operations.
 
-Changes:
-- process events in chunks with step_size=16384
-- vectorize dimuon selection and mass calculation within each chunk
-- use Muon_phi for px/py calculation
-- accumulate dimuon mass with np.histogram instead of storing every mass
+This exercise is the vectorized successor to ``ex01.py``. It reads chunks from
+the ``Events`` tree, keeps events whose first two muons have opposite charge and
+transverse momentum above 3 GeV, computes their invariant masses with Awkward
+Array and NumPy operations, accumulates a histogram per chunk, and writes the
+spectrum to ``ex02.png``.
+
+Compared with ``ex01.py``, this version avoids Python event-by-event loops, uses
+``Muon_phi`` in the px/py calculation, and stores histogram counts instead of a
+list of every selected dimuon mass.
 """
 import time
 import argparse
@@ -17,6 +20,7 @@ import matplotlib.pyplot as plt
 
 
 def compute_px_py_pz_energy(pt, eta, phi, mass):
+    """Convert arrays of particle kinematics into momentum and energy arrays."""
     px = pt * np.cos(phi)
     py = pt * np.sin(phi)
     pz = pt * np.sinh(eta)
@@ -26,10 +30,13 @@ def compute_px_py_pz_energy(pt, eta, phi, mass):
 
     return px, py, pz, energy
 
+
 def compute_mass(px, py, pz, energy):
+    """Compute invariant mass from arrays of summed four-vectors."""
     mass2 = energy**2 - (px**2 + py**2 + pz**2)
     mass = np.sqrt(ak.where(mass2 > 0.0, mass2, 0.0))
     return mass
+
 
 parser = argparse.ArgumentParser(description="Dimuon mass spectrum analysis")
 parser.add_argument("-n", "--num-events", type=int, default=None, help="Number of events to process (default: all events)")
@@ -69,14 +76,16 @@ with tqdm.tqdm(total=num_events) as progress:
     ):
         progress.update(len(chunk["nMuon"]))
 
+        # Each chunk contains many events. Keep the operations on whole arrays.
         # Select events with at least two muons
         has_two_muons = chunk["nMuon"] >= 2
         selected = chunk[has_two_muons]
 
         if len(selected["nMuon"]) == 0:
-            # there is no events with at least two muons, move on to the next chunk
+            # There are no events with at least two muons; move on to the next chunk.
             continue
 
+        # This exercise intentionally uses only the first two muons in each event.
         muon_charge_0 = selected["Muon_charge"][:, 0]
         muon_charge_1 = selected["Muon_charge"][:, 1]
         muon_pt_0 = selected["Muon_pt"][:, 0]
@@ -91,7 +100,7 @@ with tqdm.tqdm(total=num_events) as progress:
         selected = selected[event_mask]
 
         if len(selected["nMuon"]) == 0:
-            # there is no events with two muons of opposite charge and pT > 3 GeV, move on to the next chunk
+            # There are no events passing the dimuon selection in this chunk.
             continue
 
         px_0, py_0, pz_0, energy_0 = compute_px_py_pz_energy(
@@ -114,6 +123,8 @@ with tqdm.tqdm(total=num_events) as progress:
         energy = energy_0 + energy_1
 
         mass = compute_mass(px, py, pz, energy)
+
+        # Accumulate fixed-bin counts instead of keeping all masses in memory.
         mass_hist, _ = np.histogram(ak.to_numpy(mass), bins=mass_bin_edges)
         dimuon_mass_hist += mass_hist
 

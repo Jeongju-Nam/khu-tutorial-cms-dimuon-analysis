@@ -1,4 +1,12 @@
-"""
+"""Build a dimuon invariant-mass spectrum one event at a time.
+
+This exercise reads the ``Events`` tree from the CMS Open Data NanoAOD Run 2012
+DoubleMuParked sample and keeps events whose first two muons have opposite
+charge and transverse momentum above 3 GeV. It computes the invariant mass from
+the two muon four-vectors, fills a Python list, and writes the spectrum to
+``ex01.png``.
+
+Reference analysis:
 https://github.com/cms-opendata-analyses/NanoAODRun1Examples/blob/main/dimuon_2012/dimuonSpectrum2012_eospublic.py
 """
 import time
@@ -8,7 +16,9 @@ import math
 import tqdm
 import matplotlib.pyplot as plt
 
+
 def compute_px_py_pz_energy(pt, eta, phi, mass):
+    """Convert particle kinematics into Cartesian momentum and energy."""
     px = pt * math.cos(phi)
     py = pt * math.sin(phi)
     pz = pt * math.sinh(eta)
@@ -18,10 +28,13 @@ def compute_px_py_pz_energy(pt, eta, phi, mass):
 
     return px, py, pz, energy
 
+
 def compute_mass(px, py, pz, energy):
+    """Compute invariant mass from a summed four-vector."""
     mass2 = energy**2 - (px**2 + py**2 + pz**2)
     mass = math.sqrt(max(mass2, 0.0))
     return mass
+
 
 parser = argparse.ArgumentParser(description="Dimuon mass spectrum analysis")
 parser.add_argument("-n", "--num-events", type=int, default=None, help="Number of events to process (default: all events)")
@@ -41,6 +54,7 @@ dimuon_mass_list = []
 analysis_start = time.time()
 
 for chunk in tqdm.tqdm(tree.iterate(entry_stop=num_events, step_size=1, library='np'), total=num_events):
+    # With step_size=1, each chunk contains one event. Strip the chunk axis.
     event = {key: value[0] for key, value in chunk.items()}
 
     # Select events with at least two muons
@@ -54,6 +68,7 @@ for chunk in tqdm.tqdm(tree.iterate(entry_stop=num_events, step_size=1, library=
     if (event['Muon_pt'][0] <= 3) or (event['Muon_pt'][1] <= 3):
         continue
 
+    # This exercise intentionally uses only the first two muons in each event.
     px_0, py_0, pz_0, energy_0 = compute_px_py_pz_energy(
         pt=event['Muon_pt'][0],
         eta=event['Muon_eta'][0],
