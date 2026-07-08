@@ -17,6 +17,54 @@ Both scripts read the `Events` tree from:
 They select events with at least two muons, require the first two muons to have
 opposite charge and `pT > 3 GeV`, then plot the dimuon invariant-mass spectrum.
 
+## Arrays used in this tutorial
+
+### NumPy arrays
+
+A NumPy array is a fast, fixed-shape container for numerical data. It is similar
+to a Python list, but it stores values in a compact typed block of memory and
+can apply math to all values at once:
+
+```python
+import numpy as np
+
+pt = np.array([4.2, 18.0, 42.5])
+passes_cut = pt > 3.0
+```
+
+In this tutorial, NumPy is useful when the data are regular: bin edges,
+histogram counts, and per-muon calculations after selecting one value per event.
+For example, `ex02.py` uses `np.cos`, `np.sin`, `np.sqrt`, `np.linspace`,
+`np.zeros`, and `np.histogram`.
+
+### Awkward arrays
+
+An Awkward Array is an array library for nested or variable-length data. That is
+important for collision events because each event can contain a different number
+of muons:
+
+```python
+# Event 0 has two muons, event 1 has one, event 2 has three.
+muon_pt = [[12.0, 8.5], [5.1], [31.0, 9.2, 4.8]]
+```
+
+This shape is awkward for plain NumPy because the rows do not all have the same
+length. Awkward keeps that event structure while still allowing array-style
+selection and math:
+
+```python
+selected = chunk[chunk["nMuon"] >= 2]
+first_muon_pt = selected["Muon_pt"][:, 0]
+```
+
+In `ex02.py`, uproot returns chunks with `library="ak"`, so branches such as
+`Muon_pt`, `Muon_eta`, and `Muon_charge` are Awkward arrays. After the event
+selection produces one dimuon mass per selected event, `ak.to_numpy(mass)`
+converts that regular result to NumPy for histogramming.
+
+Use NumPy when the data are rectangular and numeric. Use Awkward when the data
+are nested, jagged, or event-based with different numbers of objects per event.
+
 ## Recipes
 
 ### Install dependencies
