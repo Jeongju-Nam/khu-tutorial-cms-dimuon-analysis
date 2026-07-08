@@ -2,10 +2,12 @@
 Vectorized successor of ex01.py.
 
 Changes:
-- process events in chunks with step_size=1024
+- process events in chunks with step_size=16384
 - vectorize dimuon selection and mass calculation within each chunk
 - use Muon_phi for px/py calculation
+- accumulate dimuon mass with np.histogram instead of storing every mass
 """
+import time
 import awkward as ak
 import numpy as np
 import tqdm
@@ -23,22 +25,23 @@ def compute_px_py_pz_energy(pt, eta, phi, mass):
 
     return px, py, pz, energy
 
-
 def compute_mass(px, py, pz, energy):
     mass2 = energy**2 - (px**2 + py**2 + pz**2)
     mass = np.sqrt(ak.where(mass2 > 0.0, mass2, 0.0))
     return mass
-
 
 path = "/store/hep/users/slowmoyang/NanoAODRun1Examples/Run2012BC_DoubleMuParked_Muons.root"
 file = uproot.open(path)
 
 tree = file["Events"]
 
-max_events = min(10_000, tree.num_entries)
-step_size = 1024
+max_events = tree.num_entries
+step_size = 16384
 
-dimuon_mass_list = []
+mass_bins = 30_000
+mass_range = (0.25, 300.0)
+mass_bin_edges = np.linspace(mass_range[0], mass_range[1], mass_bins + 1)
+dimuon_mass_hist = np.zeros(mass_bins, dtype=np.int64)
 
 branches = [
     "nMuon",
@@ -48,6 +51,9 @@ branches = [
     "Muon_phi",
     "Muon_mass",
 ]
+
+
+analysis_start = time.time()
 
 with tqdm.tqdm(total=max_events) as progress:
     for chunk in tree.iterate(
@@ -63,6 +69,7 @@ with tqdm.tqdm(total=max_events) as progress:
         selected = chunk[has_two_muons]
 
         if len(selected["nMuon"]) == 0:
+            # there is no events with at least two muons, move on to the next chunk
             continue
 
         muon_charge_0 = selected["Muon_charge"][:, 0]
@@ -79,6 +86,7 @@ with tqdm.tqdm(total=max_events) as progress:
         selected = selected[event_mask]
 
         if len(selected["nMuon"]) == 0:
+            # there is no events with two muons of opposite charge and pT > 3 GeV, move on to the next chunk
             continue
 
         px_0, py_0, pz_0, energy_0 = compute_px_py_pz_energy(
@@ -101,17 +109,23 @@ with tqdm.tqdm(total=max_events) as progress:
         energy = energy_0 + energy_1
 
         mass = compute_mass(px, py, pz, energy)
-        dimuon_mass_list.extend(ak.to_list(mass))
+        mass_hist, _ = np.histogram(ak.to_numpy(mass), bins=mass_bin_edges)
+        dimuon_mass_hist += mass_hist
+
+analysis_elapsed_time = time.time() - analysis_start
+print(f"Analysis time: {analysis_elapsed_time:.2f} seconds")
+
+plotting_start = time.time()
 
 fig, ax = plt.subplots()
 
-ax.hist(dimuon_mass_list, bins=30_000, range=(0.25, 300.0))
+ax.stairs(dimuon_mass_hist, mass_bin_edges, baseline=None)
 
 # Log scales
 ax.set_xscale("log")
 ax.set_yscale("log")
 
-ax.set_xlim(0.25, 300.0)
+ax.set_xlim(mass_range)
 
 # Axis titles
 ax.set_xlabel(r"$m_{\mu\mu}$ (GeV)", fontsize=14)
@@ -138,3 +152,6 @@ ax.legend(
 
 plt.tight_layout()
 plt.savefig("./ex02.png")
+
+plotting_elapsed_time = time.time() - plotting_start
+print(f"Plotting time: {plotting_elapsed_time:.2f} seconds")

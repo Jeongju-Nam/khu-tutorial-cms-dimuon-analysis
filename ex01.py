@@ -1,6 +1,7 @@
 """
 https://github.com/cms-opendata-analyses/NanoAODRun1Examples/blob/main/dimuon_2012/dimuonSpectrum2012_eospublic.py
 """
+import time
 import uproot
 import math
 import tqdm
@@ -27,9 +28,12 @@ file = uproot.open(path)
 tree = file['Events']
 tree_iterator = tree.iterate(step_size=1, library='np')
 
-max_events = min(10_000, tree.num_entries)
+#max_events = 10_000
+max_events = tree.num_entries
 
 dimuon_mass_list = []
+
+analysis_start = time.time()
 
 for chunk in tqdm.tqdm(tree.iterate(entry_stop=max_events, step_size=1, library='np'), total=max_events):
     event = {key: value[0] for key, value in chunk.items()}
@@ -67,6 +71,11 @@ for chunk in tqdm.tqdm(tree.iterate(entry_stop=max_events, step_size=1, library=
     mass = compute_mass(px, py, pz, energy)
     dimuon_mass_list.append(mass)
 
+analysis_elapsed_time = time.time() - analysis_start
+print(f"Analysis time: {analysis_elapsed_time:.2f} seconds")
+
+plotting_start = time.time()
+
 fig, ax = plt.subplots()
 
 ax.hist(dimuon_mass_list, bins=30_000, range=(0.25, 300.0))
@@ -102,3 +111,6 @@ ax.legend(
 
 plt.tight_layout()
 plt.savefig('./ex01.png')
+
+plotting_elapsed_time = time.time() - plotting_start
+print(f"Plotting time: {plotting_elapsed_time:.2f} seconds")
