@@ -1,46 +1,104 @@
+"""
+https://github.com/cms-opendata-analyses/NanoAODRun1Examples/blob/main/dimuon_2012/dimuonSpectrum2012_eospublic.py
+"""
 import uproot
+import math
+import tqdm
+import matplotlib.pyplot as plt
 
-# string
+def compute_px_py_pz_energy(pt, eta, phi, mass):
+    px = pt * math.cos(phi)
+    py = pt * math.sin(phi)
+    pz = pt * math.sinh(eta)
+
+    momentum2 = px**2 + py**2 + pz**2
+    energy = math.sqrt(momentum2 + mass**2)
+
+    return px, py, pz, energy
+
+def compute_mass(px, py, pz, energy):
+    mass2 = energy**2 - (px**2 + py**2 + pz**2)
+    mass = math.sqrt(max(mass2, 0.0))
+    return mass
+
 path = "/store/hep/users/slowmoyang/NanoAODRun1Examples/Run2012BC_DoubleMuParked_Muons.root"
-print(path)
-print('type of path: ', type(path))
-
 file = uproot.open(path)
-print(file)
-
-print(file.keys())
 
 tree = file['Events']
-print(tree)
+tree_iterator = tree.iterate(step_size=1, library='np')
 
-print('Number of Events:')
-print(tree.num_entries)
+max_events = min(10_000, tree.num_entries)
 
-tree_iter = tree.iterate(step_size=1, library='np')
-print(tree_iter)
+dimuon_mass_list = []
 
-#event = next(tree_iter)
-#print('First event: ')
-#print(event)
+for chunk in tqdm.tqdm(tree.iterate(entry_stop=max_events, step_size=1, library='np'), total=max_events):
+    event = {key: value[0] for key, value in chunk.items()}
 
-#event = next(tree_iter)
-#print("second: ")
-#print(event)
+    # Select events with at least two muons
+    if event['nMuon'] < 2:
+        continue
 
-count = 0
+    # Select events with two muons of opposite charge and pT> 3 GeV
+    if event['Muon_charge'][0] == event['Muon_charge'][1]:
+        continue
 
-# for loop
-for event in tree_iter:
-    print(event)
-    print('---------')
+    if (event['Muon_pt'][0] <= 3) or (event['Muon_pt'][1] <= 3):
+        continue
 
-    #count = count + 1
-    count += 1
+    px_0, py_0, pz_0, energy_0 = compute_px_py_pz_energy(
+        pt=event['Muon_pt'][0],
+        eta=event['Muon_eta'][0],
+        phi=event['Muon_eta'][0],
+        mass=event['Muon_mass'][0],
+    )
 
-    if count >= 5:
-        break
+    px_1, py_1, pz_1, energy_1 = compute_px_py_pz_energy(
+        pt=event['Muon_pt'][1],
+        eta=event['Muon_eta'][1],
+        phi=event['Muon_eta'][1],
+        mass=event['Muon_mass'][1],
+    )
 
-print('count: ', count)
-print('we break the loop')
+    px = px_0 + px_1
+    py = py_0 + py_1
+    pz = pz_0 + pz_1
+    energy = energy_0 + energy_1
 
-print('type of event: ', type(event))
+    mass = compute_mass(px, py, pz, energy)
+    dimuon_mass_list.append(mass)
+
+fig, ax = plt.subplots()
+
+ax.hist(dimuon_mass_list, bins=30_000, range=(0.25, 300.0))
+
+# Log scales
+ax.set_xscale("log")
+ax.set_yscale("log")
+
+ax.set_xlim(0.25, 300.0)
+
+# Axis titles
+ax.set_xlabel(r"$m_{\mu\mu}$ (GeV)", fontsize=14)
+ax.set_ylabel(r"$N_{\mathrm{Events}}$", fontsize=14)
+
+ax.tick_params(axis="both", which="both", direction="in", top=True, right=True)
+
+# Resonance vertical lines with axvline labels, without loop
+
+ax.axvline(0.55, color="blue", linestyle="--", label=r"$\eta$")
+ax.axvline(0.77, color="orange", linestyle="--", label=r"$\rho,\omega$")
+ax.axvline(1.2, color="green", linestyle="--", label=r"$\phi$")
+ax.axvline(4.4, color="red", linestyle="--", label=r"$J/\psi$")
+ax.axvline(4.6, color="purple", linestyle="--", label=r"$\psi'$")
+ax.axvline(12.0, color="brown", linestyle="--", label=r"$Y(1,2,3S)$")
+ax.axvline(91.0, color="pink", linestyle="--", label=r"$Z$")
+
+ax.legend(
+    loc="upper right",
+    fontsize=9,
+    frameon=False,
+    ncol=2,
+)
+
+plt.tight_layout()
+plt.savefig('./ex01.png')
