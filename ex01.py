@@ -2,6 +2,7 @@
 https://github.com/cms-opendata-analyses/NanoAODRun1Examples/blob/main/dimuon_2012/dimuonSpectrum2012_eospublic.py
 """
 import time
+import argparse
 import uproot
 import math
 import tqdm
@@ -22,20 +23,24 @@ def compute_mass(px, py, pz, energy):
     mass = math.sqrt(max(mass2, 0.0))
     return mass
 
+parser = argparse.ArgumentParser(description="Dimuon mass spectrum analysis")
+parser.add_argument("-n", "--num-events", type=int, default=None, help="Number of events to process (default: all events)")
+args = parser.parse_args()
+
+
 path = "/store/hep/users/slowmoyang/NanoAODRun1Examples/Run2012BC_DoubleMuParked_Muons.root"
 file = uproot.open(path)
 
 tree = file['Events']
 tree_iterator = tree.iterate(step_size=1, library='np')
 
-#max_events = 10_000
-max_events = tree.num_entries
+num_events = args.num_events or tree.num_entries
 
 dimuon_mass_list = []
 
 analysis_start = time.time()
 
-for chunk in tqdm.tqdm(tree.iterate(entry_stop=max_events, step_size=1, library='np'), total=max_events):
+for chunk in tqdm.tqdm(tree.iterate(entry_stop=num_events, step_size=1, library='np'), total=num_events):
     event = {key: value[0] for key, value in chunk.items()}
 
     # Select events with at least two muons

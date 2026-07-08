@@ -8,6 +8,7 @@ Changes:
 - accumulate dimuon mass with np.histogram instead of storing every mass
 """
 import time
+import argparse
 import awkward as ak
 import numpy as np
 import tqdm
@@ -30,13 +31,17 @@ def compute_mass(px, py, pz, energy):
     mass = np.sqrt(ak.where(mass2 > 0.0, mass2, 0.0))
     return mass
 
+parser = argparse.ArgumentParser(description="Dimuon mass spectrum analysis")
+parser.add_argument("-n", "--num-events", type=int, default=None, help="Number of events to process (default: all events)")
+parser.add_argument("-s", "--step-size", type=int, default=16384, help="Number of events to process in each chunk (default: 16384)")
+args = parser.parse_args()
+
 path = "/store/hep/users/slowmoyang/NanoAODRun1Examples/Run2012BC_DoubleMuParked_Muons.root"
 file = uproot.open(path)
 
 tree = file["Events"]
 
-max_events = tree.num_entries
-step_size = 16384
+num_events = args.num_events or tree.num_entries
 
 mass_bins = 30_000
 mass_range = (0.25, 300.0)
@@ -55,11 +60,11 @@ branches = [
 
 analysis_start = time.time()
 
-with tqdm.tqdm(total=max_events) as progress:
+with tqdm.tqdm(total=num_events) as progress:
     for chunk in tree.iterate(
         branches,
-        entry_stop=max_events,
-        step_size=step_size,
+        entry_stop=num_events,
+        step_size=args.step_size,
         library="ak",
     ):
         progress.update(len(chunk["nMuon"]))
